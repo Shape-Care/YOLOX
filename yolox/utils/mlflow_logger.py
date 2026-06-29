@@ -22,8 +22,28 @@ import packaging.version
 from loguru import logger
 
 import torch
+import re
 
 from yolox.utils import is_main_process
+
+
+# MLflow's artifact-path / run-name / experiment-name validators only accept
+# alphanumerics plus `_ - . ` and `/` (the latter only as a path separator).
+# Anything else (colons, parens, `%`, quotes, spaces in some contexts, etc.)
+# causes "Invalid ... name" errors at log time. We sanitize per component so
+# that multi-level artifact paths like "exp/best_ckpt" keep their structure.
+_MLFLOW_INVALID_CHARS = re.compile(r"[^A-Za-z0-9_\-. ]+")
+
+
+def mlflow_safe_name(name: str) -> str:
+    """Sanitize a single name (no path separators) for MLflow."""
+    cleaned = _MLFLOW_INVALID_CHARS.sub("_", str(name)).strip("_")
+    return cleaned or "unnamed"
+
+def mlflow_safe_path(path: str) -> str:
+    """Sanitize each component of a '/'-separated artifact path, preserving separators."""
+    return "/".join(mlflow_safe_name(p) for p in str(path).split("/") if p)
+
 
 
 class MlflowLogger:
@@ -162,12 +182,14 @@ class MlflowLogger:
         self._mlflow_log_nth_epoch_models = os.getenv("YOLOX_MLFLOW_LOG_Nth_EPOCH_MODELS",
                                                       "False").upper() in self.ENV_VARS_TRUE_VALUES
         self.run_name = os.getenv("YOLOX_MLFLOW_RUN_NAME", None)
-        self.run_name = None if len(self.run_name.strip()) == 0 else self.run_name
+        #self.run_name = None if len(self.run_name.strip()) == 0 else self.run_name
+        self.run_name = None if not self.run_name or len(self.run_name.strip()) == 0 else mlflow_safe_name(self.run_name)
         self._flatten_params = os.getenv("YOLOX_MLFLOW_FLATTEN_PARAMS",
                                          "FALSE").upper() in self.ENV_VARS_TRUE_VALUES
         self._nested_run = os.getenv("MLFLOW_NESTED_RUN",
                                      "FALSE").upper() in self.ENV_VARS_TRUE_VALUES
         self._run_id = os.getenv("MLFLOW_RUN_ID", None)
+
 
         # "synchronous" flag is only available with mlflow version >= 2.8.0
         # https://github.com/mlflow/mlflow/pull/9705
@@ -322,10 +344,11 @@ class MlflowLogger:
             None
         """
         if is_main_process() and self._initialized:
-            self.save_log_file(args, file_name)
+            #self.save_log_file(args, file_name)
             if self.best_ckpt_upload_pending:
                 model_file_name = "best_ckpt"
-                mlflow_out_dir = f"{args.experiment_name}/{model_file_name}"
+                #mlflow_out_dir = f"{args.experiment_name}/{model_file_name}"
+                mlflow_out_dir = mlflow_safe_name(args.experiment_name)
                 artifact_path = os.path.join(file_name, f"{model_file_name}.pth")
                 self.mlflow_save_pyfunc_model(metadata, artifact_path, mlflow_out_dir)
             if self._auto_end_run and self._ml_flow.active_run():
@@ -366,16 +389,18 @@ class MlflowLogger:
             if update_best_ckpt:
                 self.best_ckpt_upload_pending = True
             if ((epoch + 1) % self._mlflow_log_model_per_n_epochs) == 0:
-                self.save_log_file(args, file_name)
+                #self.save_log_file(args, file_name)
                 if self.best_ckpt_upload_pending:
                     model_file_name = "best_ckpt"
-                    mlflow_out_dir = f"{args.experiment_name}/{model_file_name}"
+                    #mlflow_out_dir = f"{args.experiment_name}/{model_file_name}"
+                    mlflow_out_dir = f"{mlflow_safe_name(args.experiment_name)}/{model_file_name}"
                     artifact_path = os.path.join(file_name, f"{model_file_name}.pth")
                     self.mlflow_save_pyfunc_model(metadata, artifact_path, mlflow_out_dir)
                     self.best_ckpt_upload_pending = False
                 if self._mlflow_log_nth_epoch_models and exp.save_history_ckpt:
                     model_file_name = f"epoch_{epoch + 1}_ckpt"
-                    mlflow_out_dir = f"{args.experiment_name}/hist_epochs/{model_file_name}"
+                    #mlflow_out_dir = f"{args.experiment_name}/hist_epochs/{model_file_name}"
+                    mlflow_out_dir = f"{mlflow_safe_name(args.experiment_name)}/{model_file_name}"
                     artifact_path = os.path.join(file_name, f"{model_file_name}.pth")
                     self.mlflow_save_pyfunc_model(metadata, artifact_path, mlflow_out_dir)
 
@@ -399,7 +424,7 @@ class MlflowLogger:
             if os.path.exists(artifact_path):
                 self._ml_flow.pyfunc.log_model(
                     mlflow_out_dir,
-                    artifacts={"model_path": artifact_path},
+                    #artifacts={"model_path": artifact_path},
                     python_model=self._ml_flow.pyfunc.PythonModel(),
                     metadata=metadata
                 )

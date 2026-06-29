@@ -1,0 +1,21 @@
+[project]
+name = "coco-merge"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "KrystianZielinski",email = "krystian.zielinski@shape.care"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pycocotools (>=2.0.10,<3.0.0)",
+    "tqdm (>=4.67.1,<5.0.0)"
+]
+
+[tool.poetry]
+packages = [{include = "coco_merge", from = "src"}]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

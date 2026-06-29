@@ -82,5 +82,18 @@ if __name__ == '__main__':
                          conf=args.score_thr, class_names=COCO_CLASSES)
 
     mkdir(args.output_dir)
-    output_path = os.path.join(args.output_dir, os.path.basename(args.image_path))
+    # === get filenames ===
+    image_name = os.path.basename(args.image_path)
+    image_stem, image_ext = os.path.splitext(image_name)
+
+    model_name = os.path.basename(args.model)
+    model_stem = os.path.splitext(model_name)[0]
+
+    # === new filename: image + model ===
+    output_filename = f"{image_stem}_{model_stem}{image_ext}"
+    output_path = os.path.join(args.output_dir, output_filename)
+
     cv2.imwrite(output_path, origin_img)
+
+    # output_path = os.path.join(args.output_dir, os.path.basename(args.image_path))
+    # cv2.imwrite(output_path, origin_img)
